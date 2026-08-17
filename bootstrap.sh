@@ -61,7 +61,10 @@ else
 fi
 
 step "dsh-terminal-ui (bundle, installed into profile '$PROFILE')"
-(cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm install && pnpm run build)
+# Install dev tooling only: peers stay unresolved here and come from the
+# profile's healed node_modules at runtime; resolving them from npm would 404
+# on unpublished workspace packages.
+(cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm install --config.auto-install-peers=false && pnpm run build)
 (cd "$HARNESS_DIR" && pnpm dsh plugin --profile "$PROFILE" add "link:$PLUGINS_ROOT/dsh-terminal-ui")
 
 step "vision-fallback (host plugin, patched into profile '$PROFILE')"

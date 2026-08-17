@@ -33,7 +33,9 @@ fi
 
 step "dsh-terminal-ui"
 PLUGIN_HEAD_BEFORE="$(git -C "$PLUGINS_ROOT/dsh-terminal-ui" rev-parse HEAD 2>/dev/null || true)"
-(cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm install)
+# Peers resolve from the profile's healed node_modules at runtime; fetching
+# them from npm would 404 on unpublished workspace packages.
+(cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm install --config.auto-install-peers=false)
 PLUGIN_HEAD_AFTER="$(git -C "$PLUGINS_ROOT/dsh-terminal-ui" rev-parse HEAD 2>/dev/null || true)"
 if [ "$PLUGIN_HEAD_BEFORE" != "$PLUGIN_HEAD_AFTER" ]; then
   (cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm run build)
