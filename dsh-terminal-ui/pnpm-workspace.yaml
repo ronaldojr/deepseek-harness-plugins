@@ -1,0 +1,9 @@
+# Settings-only workspace file: this directory is a standalone plugin
+# checkout, not a multi-package workspace, but pnpm >= 10 reads its settings
+# from pnpm-workspace.yaml. The @deepseek-ai/* peers come from the profile's
+# healed node_modules at runtime and must never be resolved against npm,
+# where those workspace packages do not exist (a fetch 404s).
+# verify-deps-before-run is disabled too: its internal install ignores
+# command-line flags and re-resolves those peers before every pnpm command.
+autoInstallPeers: false
+verify-deps-before-run: false

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# On failure, print the exact command that failed — the evidence the next
+# debugging pass needs, instead of guessing which step broke.
+trap 'echo "error: command failed: $BASH_COMMAND" >&2' ERR
 
 # One-shot DeepSeek Harness VM setup: clones (or updates) the Sabiá harness
 # branch, builds it, installs every plugin in this repo into the web profile,

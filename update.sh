@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# On failure, print the exact command that failed — the evidence the next
+# debugging pass needs, instead of guessing which step broke.
+trap 'echo "error: command failed: $BASH_COMMAND" >&2' ERR
 
 # Update an existing VM installation to the latest committed state:
 #   - git pull this plugins repo, the harness branch, and rebuild what changed
