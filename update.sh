@@ -40,7 +40,7 @@ PLUGIN_HEAD_AFTER="$(git -C "$PLUGINS_ROOT/dsh-terminal-ui" rev-parse HEAD 2>/de
 if [ "$PLUGIN_HEAD_BEFORE" != "$PLUGIN_HEAD_AFTER" ]; then
   (cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm run build)
 fi
-(cd "$HARNESS_DIR" && pnpm dsh plugin --profile "$PROFILE" add "link:$PLUGINS_ROOT/dsh-terminal-ui")
+(cd "$HARNESS_DIR" && pnpm dsh plugin --profile "$PROFILE" add --config.auto-install-peers=false "link:$PLUGINS_ROOT/dsh-terminal-ui")
 
 step "vision-fallback"
 "$PLUGINS_ROOT/vision-fallback/install.sh"

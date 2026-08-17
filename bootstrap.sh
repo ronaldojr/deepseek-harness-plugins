@@ -65,7 +65,10 @@ step "dsh-terminal-ui (bundle, installed into profile '$PROFILE')"
 # profile's healed node_modules at runtime; resolving them from npm would 404
 # on unpublished workspace packages.
 (cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm install --config.auto-install-peers=false && pnpm run build)
-(cd "$HARNESS_DIR" && pnpm dsh plugin --profile "$PROFILE" add "link:$PLUGINS_ROOT/dsh-terminal-ui")
+# The profile install also skips peer auto-install: dsh heals
+# $DSH_HOME/profiles/node_modules at boot, so peers resolve from the harness
+# checkout instead of the npm registry (which lacks them).
+(cd "$HARNESS_DIR" && pnpm dsh plugin --profile "$PROFILE" add --config.auto-install-peers=false "link:$PLUGINS_ROOT/dsh-terminal-ui")
 
 step "vision-fallback (host plugin, patched into profile '$PROFILE')"
 "$PLUGINS_ROOT/vision-fallback/install.sh"
