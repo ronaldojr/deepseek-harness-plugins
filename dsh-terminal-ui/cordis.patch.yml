@@ -1,0 +1,22 @@
+# dsh-terminal-ui bundle patch.
+#
+# One insert over the effective profile tree: a single plugin row whose
+# package (this one) carries both the Host half (an HTTP upgrade route that
+# hands each WebSocket a PTY over ctx.subprocess.spawnTerminal) and the
+# browser half (a tabbed xterm terminal panel registered into the
+# `shell.overlay` and `conversation.session.header.actions` slots, served by
+# the client module table through the `dsh.client` manifest).
+#
+# The row's `name` resolves through the profile directory's Node parent-walk,
+# which reaches the profile-local node_modules where `dsh plugin add` installs
+# this package, so no absolute path is hard-coded here.
+
+- insert:
+    - id: terminal-ui
+      name: 'dsh-terminal-ui'
+      # Optional overrides (all have in-code defaults):
+      #   shell:    shell executable argv[0] (defaults to $SHELL / %COMSPEC% / /bin/sh)
+      #   cols:     default terminal width in columns (default 100)
+      #   rows:     default terminal height in rows (default 30)
+      #   graceMs:  TERM-to-KILL cleanup grace in milliseconds (default 5000)
+      #   path:     upgrade route pathname (default /plugins/dsh-terminal-ui/ws)

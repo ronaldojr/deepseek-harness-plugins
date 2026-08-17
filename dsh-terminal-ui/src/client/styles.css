@@ -1,0 +1,141 @@
+/* dsh-terminal-ui panel styles. Global (unhashed) class names, namespaced
+   under `dsh-term-` to avoid collisions; injected as a <style data-plugin> tag
+   by the tsdown css-inline loader. The panel fills the `details` column the
+   layout gives it — no absolute positioning or self-managed width. */
+
+.dsh-term-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--dsw-alias-bg-base, #141414);
+}
+
+.dsh-term-tabs {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 36px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #2a2a2a);
+  background: var(--dsw-specific-sidebar-fill, #1b1b1b);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dsh-term-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.dsh-term-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  max-width: 180px;
+  padding: 5px 10px;
+  border-right: 1px solid var(--dsw-alias-border-l2, #2a2a2a);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary, #9a9a9a);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dsh-term-tab-active {
+  color: var(--dsw-alias-label-primary, #e6e6e6);
+  background: var(--dsw-alias-bg-base, #141414);
+}
+
+.dsh-term-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-term-tab-close {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dsh-term-tab-close:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #2a2a2a);
+}
+
+.dsh-term-add,
+.dsh-term-collapse {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #9a9a9a);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dsh-term-collapse {
+  margin-left: auto;
+}
+
+.dsh-term-add:hover,
+.dsh-term-collapse:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #2a2a2a);
+  color: var(--dsw-alias-label-primary, #e6e6e6);
+}
+
+.dsh-term-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.dsh-term-empty {
+  padding: 16px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+
+.dsh-term-view {
+  height: 100%;
+}
+
+.dsh-term-container {
+  height: 100%;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.dsh-term-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #9a9a9a);
+  cursor: pointer;
+}
+
+.dsh-term-action:hover {
+  background: var(--dsw-alias-interactive-bg-hover, #2a2a2a);
+  color: var(--dsw-alias-label-primary, #e6e6e6);
+}

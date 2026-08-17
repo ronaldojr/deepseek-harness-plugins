@@ -1,0 +1,19 @@
+[Unit]
+Description=DeepSeek Harness web profile (dsh web)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/deepseek-harness
+ExecStart=%h/.nvm/versions/node/v24.15.0/bin/pnpm dsh web
+Restart=on-failure
+RestartSec=5
+# Load provider keys from a user-owned env file; create it with the same
+# variables the bootstrap prints (DEEPSEEK_API_KEY lives in .env inside the
+# checkout, read by dsh itself).
+EnvironmentFile=%h/.config/dsh/env
+Environment=DSH_HOME=%h/.dsh
+
+[Install]
+WantedBy=default.target

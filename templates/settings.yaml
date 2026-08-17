@@ -1,0 +1,17 @@
+ui-onboarding:
+  welcomeNoticeVersion: 2026-08-13.1
+ui-theme:
+  preference: dark
+agent-default-model:
+  provider: deepseek-official
+  model: deepseek-v4-pro
+  reasoningEffort: max
+llm-pi-ai:
+  providers:
+    opencode-go:
+      apiKeyEnv: OPENCODE_GO_API_KEY
+    google:
+      apiKeyEnv: GOOGLE_API_KEY
+    github-copilot:
+      apiKeyEnv: GITHUB_COPILOT_API_KEY
+      baseURL: https://api.business.githubcopilot.com
