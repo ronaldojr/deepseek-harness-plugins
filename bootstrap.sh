@@ -61,6 +61,15 @@ else
 fi
 
 step "dsh-terminal-ui (bundle, installed into profile '$PROFILE')"
+# A profile left half-written by an interrupted pnpm add (package.json present,
+# no lockfile) makes every later pnpm command fail while re-resolving peers
+# that do not exist on npm. Detect it before the confusing 404.
+PROFILE_DIR="$DSH_HOME/profiles/$PROFILE"
+if [ -f "$PROFILE_DIR/package.json" ] && [ ! -f "$PROFILE_DIR/pnpm-lock.yaml" ]; then
+  echo "error: profile $PROFILE at $PROFILE_DIR is half-initialized (package.json without pnpm-lock.yaml)." >&2
+  echo "       Remove it and re-run: rm -rf \"$PROFILE_DIR\"" >&2
+  exit 1
+fi
 # Install dev tooling only: peers stay unresolved here and come from the
 # profile's healed node_modules at runtime; resolving them from npm would 404
 # on unpublished workspace packages.
