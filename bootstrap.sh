@@ -12,7 +12,7 @@ set -euo pipefail
 #   DSH_HOME       harness home (default: $HOME/.dsh)
 #   PROFILE        profile name the plugins install into (default: web)
 
-HARNESS_REPO="${HARNESS_REPO:-git@github.com:ronaldojr/deepseek-harness.git}"
+HARNESS_REPO="${HARNESS_REPO:-https://github.com/ronaldojr/deepseek-harness.git}"
 HARNESS_BRANCH="${HARNESS_BRANCH:-sabiaMain}"
 HARNESS_DIR="${HARNESS_DIR:-$HOME/deepseek-harness}"
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"

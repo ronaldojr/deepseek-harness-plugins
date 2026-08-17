@@ -10,6 +10,7 @@ plugins/
   vision-fallback/   # vision-as-a-service: describes pasted images for a text-only main model
   dsh-terminal-ui/   # tabbed PTY terminal panel for the web GUI (client bundle, installed via `dsh plugin`)
   <future-plugin>/   # one folder per plugin
+setup.sh             # one-line installer (curl | bash): clones this repo and runs bootstrap.sh
 bootstrap.sh         # one-shot VM setup: harness checkout + build + all plugins
 update.sh            # pull + rebuild + reinstall on an existing VM
 templates/
@@ -33,13 +34,14 @@ bootstrap installs it with `dsh plugin --profile web add link:<path>`.
 
 ## New VM install
 
+One line:
+
 ```bash
-git clone <this repo> dsh-plugins
-cd dsh-plugins
-./bootstrap.sh
+curl -fsSL https://raw.githubusercontent.com/ronaldojr/deepseek-harness-plugins/main/setup.sh | bash
 ```
 
-The bootstrap clones the harness branch (`sabiaMain` by default) into
+The installer clones this repo into `~/deepseek-harness-plugins`, then runs
+`bootstrap.sh`, which clones the harness branch (`sabiaMain` by default) into
 `~/deepseek-harness`, runs `pnpm install && pnpm run build` there, installs
 both plugins into the `web` profile, and seeds `~/.dsh/settings.yaml`. It only
 needs `git`, Node ≥ 22.19, and pnpm (activated through corepack). It is
