@@ -40,7 +40,35 @@ PLUGIN_HEAD_AFTER="$(git -C "$PLUGINS_ROOT/dsh-terminal-ui" rev-parse HEAD 2>/de
 if [ "$PLUGIN_HEAD_BEFORE" != "$PLUGIN_HEAD_AFTER" ]; then
   (cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm run build)
 fi
-(cd "$HARNESS_DIR" && pnpm dsh plugin --profile "$PROFILE" add --config.auto-install-peers=false "link:$PLUGINS_ROOT/dsh-terminal-ui")
+# Refresh the profile wiring directly (mirrors bootstrap.sh): `dsh plugin add`
+# forwards no pnpm flags and re-resolves the link's peers from npm, which 404s.
+PROFILE_DIR="$DSH_HOME/profiles/$PROFILE"
+mkdir -p "$PROFILE_DIR" "$PROFILE_DIR/node_modules"
+if ! grep -q '"dsh-terminal-ui"' "$PROFILE_DIR/package.json" 2>/dev/null; then
+  cat > "$PROFILE_DIR/package.json" <<EOF
+{
+  "name": "dsh-profile-$PROFILE",
+  "private": true,
+  "dependencies": {
+    "dsh-terminal-ui": "link:$PLUGINS_ROOT/dsh-terminal-ui"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-terminal-ui"
+      ]
+    }
+  }
+}
+EOF
+fi
+if [ -e "$PROFILE_DIR/node_modules/dsh-terminal-ui" ] && [ ! -L "$PROFILE_DIR/node_modules/dsh-terminal-ui" ]; then
+  echo "error: $PROFILE_DIR/node_modules/dsh-terminal-ui exists and is not a symlink; remove it and re-run" >&2
+  exit 1
+fi
+ln -sfn "$PLUGINS_ROOT/dsh-terminal-ui" "$PROFILE_DIR/node_modules/dsh-terminal-ui"
 
 step "vision-fallback"
 "$PLUGINS_ROOT/vision-fallback/install.sh"

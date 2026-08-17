@@ -33,7 +33,10 @@ fi
 if ! command -v pnpm >/dev/null 2>&1; then
   require corepack
   corepack enable
-  corepack prepare pnpm@latest --activate
+  # Pin the same pnpm the harness declares (packageManager: pnpm@11.7.0):
+  # newer pnpm releases resolve linked packages' peers from the registry,
+  # where the unpublished @deepseek-ai workspace packages 404.
+  corepack prepare pnpm@11.7.0 --activate
 fi
 command -v pnpm >/dev/null 2>&1 || { echo "error: could not activate pnpm; run 'npm install -g pnpm' and retry" >&2; exit 1; }
 
@@ -61,23 +64,59 @@ else
 fi
 
 step "dsh-terminal-ui (bundle, installed into profile '$PROFILE')"
-# A profile left half-written by an interrupted pnpm add (package.json present,
-# no lockfile) makes every later pnpm command fail while re-resolving peers
-# that do not exist on npm. Detect it before the confusing 404.
-PROFILE_DIR="$DSH_HOME/profiles/$PROFILE"
-if [ -f "$PROFILE_DIR/package.json" ] && [ ! -f "$PROFILE_DIR/pnpm-lock.yaml" ]; then
-  echo "error: profile $PROFILE at $PROFILE_DIR is half-initialized (package.json without pnpm-lock.yaml)." >&2
-  echo "       Remove it and re-run: rm -rf \"$PROFILE_DIR\"" >&2
-  exit 1
-fi
 # Install dev tooling only: peers stay unresolved here and come from the
 # profile's healed node_modules at runtime; resolving them from npm would 404
 # on unpublished workspace packages.
 (cd "$PLUGINS_ROOT/dsh-terminal-ui" && pnpm install --config.auto-install-peers=false && pnpm run build)
-# The profile install also skips peer auto-install: dsh heals
+
+# Wire the profile by hand instead of `dsh plugin add`: that CLI forwards no
+# pnpm flags, and any registry-touching resolution of the link's peers 404s
+# on unpublished @deepseek-ai packages. These files mirror the profile the
+# CLI's init template plus the link produce; dsh heals
 # $DSH_HOME/profiles/node_modules at boot, so peers resolve from the harness
-# checkout instead of the npm registry (which lacks them).
-(cd "$HARNESS_DIR" && pnpm dsh plugin --profile "$PROFILE" add --config.auto-install-peers=false "link:$PLUGINS_ROOT/dsh-terminal-ui")
+# checkout at runtime.
+PROFILE_DIR="$DSH_HOME/profiles/$PROFILE"
+mkdir -p "$PROFILE_DIR" "$PROFILE_DIR/node_modules"
+cat > "$PROFILE_DIR/package.json" <<EOF
+{
+  "name": "dsh-profile-$PROFILE",
+  "private": true,
+  "dependencies": {
+    "dsh-terminal-ui": "link:$PLUGINS_ROOT/dsh-terminal-ui"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-terminal-ui"
+      ]
+    }
+  }
+}
+EOF
+if [ ! -f "$PROFILE_DIR/pnpm-workspace.yaml" ]; then
+  cat > "$PROFILE_DIR/pnpm-workspace.yaml" <<'EOF'
+packages:
+  - .
+
+nodeLinker: hoisted
+autoInstallPeers: false
+EOF
+fi
+if [ ! -f "$PROFILE_DIR/cordis.patch.yml" ]; then
+  cat > "$PROFILE_DIR/cordis.patch.yml" <<'EOF'
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+[]
+EOF
+fi
+if [ -e "$PROFILE_DIR/node_modules/dsh-terminal-ui" ] && [ ! -L "$PROFILE_DIR/node_modules/dsh-terminal-ui" ]; then
+  echo "error: $PROFILE_DIR/node_modules/dsh-terminal-ui exists and is not a symlink; remove it and re-run" >&2
+  exit 1
+fi
+ln -sfn "$PLUGINS_ROOT/dsh-terminal-ui" "$PROFILE_DIR/node_modules/dsh-terminal-ui"
 
 step "vision-fallback (host plugin, patched into profile '$PROFILE')"
 "$PLUGINS_ROOT/vision-fallback/install.sh"
