@@ -23,6 +23,11 @@
  * narrows handling to that route allowlist; omitted or empty means every
  * route, including routes added later.
  *
+ * Description calls are hand-built (the harness retry policy covers
+ * agent-loop requests only), so each one retries transient provider failures
+ * (SERVER, RATE_LIMIT, TIMEOUT, TRANSPORT, EMPTY_RESPONSE) twice with a short
+ * backoff before degrading to the unavailable placeholder.
+ *
  * Descriptions are cached by attachment id, so a screenshot already seen this
  * server run is never re-sent to the vision model.
  *
@@ -51,6 +56,47 @@ import {
 
 /** Durable-image description cache: attachmentId -> description text. */
 const descriptionCache = new Map<string, string>()
+
+/** Provider-neutral failure codes whose cause is transient; description calls retry these. */
+const TRANSIENT_CODES = new Set([
+  'SERVER',
+  'RATE_LIMIT',
+  'TIMEOUT',
+  'TRANSPORT',
+  'EMPTY_RESPONSE',
+])
+
+/** Delays (ms) before each retry of a transient description failure. */
+const RETRY_DELAYS_MS = [1000, 2000]
+
+/** Wait `ms` milliseconds, aborting early when the signal fires. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const tick = () => {
+      if (signal?.aborted) {
+        reject(new Error('vision description aborted'))
+        return
+      }
+      const remaining = ms - (Date.now() - started)
+      if (remaining <= 0) {
+        resolve()
+        return
+      }
+      setTimeout(tick, Math.min(remaining, 100))
+    }
+    tick()
+  })
+}
+
+/** A failed fallback description call; carries the provider-neutral failure code. */
+class DescriptionError extends Error {
+  readonly code: string
+  constructor(message: string, code: string) {
+    super(message)
+    this.code = code
+  }
+}
 
 export interface Config {
   /** Provider route used to describe image-bearing requests. */
@@ -114,26 +160,45 @@ export function apply(ctx: Context, config: Config = {}) {
       source: { kind: 'user' },
       content: [{ type: 'text', text: descriptionPrompt }, image],
     })
-    const nested: GenerateOptions = {
-      provider: fallbackProvider,
-      model: fallbackModel,
-      messages: [request],
-      maxTokens: descriptionMaxTokens,
-      ...(signal === undefined ? {} : { signal }),
-    }
-    const parts: string[] = []
+    let parts: string[] = []
     let truncated = false
-    for await (const chunk of ctx.llm.stream(nested)) {
-      if (chunk.type === 'text-delta') parts.push(chunk.text)
-      else if (chunk.type === 'finish') {
-        if (chunk.reason.kind === 'error') {
-          throw new Error(`vision description failed: ${chunk.reason.failure.message} (code=${chunk.reason.failure.code})`)
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+      if (attempt > 0) {
+        const delay = RETRY_DELAYS_MS[attempt - 1]
+        if (delay !== undefined) await sleep(delay, signal)
+      }
+      parts = []
+      truncated = false
+      try {
+        const nested: GenerateOptions = {
+          provider: fallbackProvider,
+          model: fallbackModel,
+          messages: [request],
+          maxTokens: descriptionMaxTokens,
+          ...(signal === undefined ? {} : { signal }),
         }
-        if (chunk.reason.kind === 'aborted') {
-          throw new Error('vision description aborted')
+        for await (const chunk of ctx.llm.stream(nested)) {
+          if (chunk.type === 'text-delta') parts.push(chunk.text)
+          else if (chunk.type === 'finish') {
+            if (chunk.reason.kind === 'error') {
+              throw new DescriptionError(
+                `vision description failed: ${chunk.reason.failure.message} (code=${chunk.reason.failure.code})`,
+                chunk.reason.failure.code,
+              )
+            }
+            if (chunk.reason.kind === 'aborted') {
+              throw new Error('vision description aborted')
+            }
+            // A max-tokens finish is a partial success: keep the text produced so far.
+            if (chunk.reason.kind === 'max-tokens') truncated = true
+          }
         }
-        // A max-tokens finish is a partial success: keep the text produced so far.
-        if (chunk.reason.kind === 'max-tokens') truncated = true
+        break
+      } catch (error) {
+        const code = (error as { code?: unknown }).code
+        const transient = typeof code === 'string' && TRANSIENT_CODES.has(code)
+        if (transient && attempt < RETRY_DELAYS_MS.length) continue
+        throw error
       }
     }
     let description = parts.join('').trim()

@@ -82,4 +82,7 @@ npm publish
 - Capability detection reads the provider's advertised `inputModalities`: a model
   that reports image support sees images directly, anything else gets a fallback
   description. Providers that report nothing are treated as text-only.
+- Description calls retry transient provider failures (`SERVER`, `RATE_LIMIT`,
+  `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`) twice with a short backoff before
+  degrading to the "description unavailable" placeholder.
 - Descriptions are cached in memory per server run by attachment id.
