@@ -17,6 +17,18 @@ mkdir -p "$PLUGIN_DIR"
 cp "$SRC_DIR/src/index.ts" "$PLUGIN_DIR/index.ts"
 echo "  source -> $PLUGIN_DIR/index.ts"
 
+# Entry blocks written by install.sh < 1.1.0 carried a `textProviders`
+# allowlist; the current plugin defaults to every provider route. Remove the
+# exact pair in place so existing installations converge on the next update,
+# while hand-edited allowlists (any other value) are preserved.
+if grep -q 'id: vision-fallback' "$PATCH_FILE" 2>/dev/null; then
+  awk '
+    prev ~ /^        textProviders:$/ && $0 ~ /^          - deepseek-official$/ { prev = ""; next }
+    { if (prev != "") print prev; prev = $0 }
+    END { if (prev != "") print prev }
+  ' "$PATCH_FILE" > "$PATCH_FILE.tmp" && mv "$PATCH_FILE.tmp" "$PATCH_FILE"
+fi
+
 ENTRY=$(cat <<EOF
 # dsh-vision-fallback (added by install.sh)
 - insert:
@@ -25,8 +37,6 @@ ENTRY=$(cat <<EOF
       config:
         fallbackProvider: opencode-go
         fallbackModel: kimi-k2.6
-        textProviders:
-          - deepseek-official
 EOF
 )
 

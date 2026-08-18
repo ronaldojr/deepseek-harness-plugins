@@ -9,6 +9,9 @@ the vision model only supplies the "eyes".
 screenshot ──► vision model describes it (per-image, cached) ──► text description ──► main model answers
 ```
 
+The fallback fires **only when the main model does not advertise image input**: models with native
+vision receive images directly and the vision route is never called.
+
 ## Files
 
 | File | Purpose |
@@ -48,10 +51,15 @@ Edit `~/.dsh/profiles/web/cordis.patch.yml`:
 
 ```yaml
 config:
-  fallbackProvider: opencode-go   # vision route
-  fallbackModel: kimi-k2.6        # vision model id
-  textProviders: [deepseek-official]
+  fallbackProvider: opencode-go   # vision route used for descriptions
+  fallbackModel: kimi-k2.6        # vision model id on that route
+  # textProviders: [deepseek-official]   # optional route allowlist; omit = every route
 ```
+
+- `textProviders` is optional: omitted (or `[]`) covers every current and future
+  provider route; set it to narrow handling to specific routes.
+- The exact fallback pair (`fallbackProvider` + `fallbackModel`) is exempt from
+  transformation, so its own description calls cannot recurse.
 
 ## Standard package / publish
 
@@ -71,5 +79,7 @@ npm publish
 
 ## Notes
 
-- Routing is provider-based (`textProviders`); keep the list to genuinely text-only routes.
+- Capability detection reads the provider's advertised `inputModalities`: a model
+  that reports image support sees images directly, anything else gets a fallback
+  description. Providers that report nothing are treated as text-only.
 - Descriptions are cached in memory per server run by attachment id.

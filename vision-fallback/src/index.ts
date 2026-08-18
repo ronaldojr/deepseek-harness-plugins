@@ -1,20 +1,27 @@
 /**
  * Vision-fallback: vision-as-a-service for text-only conversation models.
  *
- * Keeps a text-only model (DeepSeek) as the conversation default and lets it
- * "receive" image data without switching models. When a request destined for a
- * text-only route carries image content, this plugin:
+ * Keeps any text-only model as the conversation default and lets it "receive"
+ * image data without switching models. When a request carries image content
+ * for a model that cannot see images natively, this plugin:
  *
  *   1. calls the vision-capable fallback route once per image to obtain a
  *      plain-text description of each image,
  *   2. replaces the image content blocks with those descriptions, and
- *   3. re-dispatches the (now text-only) request to the original text model.
+ *   3. re-dispatches the (now text-only) request to the original model.
  *
- * The text model therefore stays in charge and answers the user's actual
- * question, while the vision model only supplies the missing "eyes". This also
- * keeps assistant provenance correct: the main model is the one streaming the
- * reply, so `assistant/message.source` records the text model instead of the
- * fallback.
+ * The conversation model therefore stays in charge and answers the user's
+ * actual question, while the vision model only supplies the missing "eyes".
+ * This also keeps assistant provenance correct: the main model is the one
+ * streaming the reply, so `assistant/message.source` records the conversation
+ * model instead of the fallback.
+ *
+ * The plugin applies to every registered provider route: a model that
+ * advertises image input receives images directly, while any other model is
+ * transformed. Only the exact fallback provider/model pair is exempt, so the
+ * fallback's own description calls cannot recurse. `textProviders`, when set,
+ * narrows handling to that route allowlist; omitted or empty means every
+ * route, including routes added later.
  *
  * Descriptions are cached by attachment id, so a screenshot already seen this
  * server run is never re-sent to the vision model.
@@ -24,7 +31,7 @@
  *   1. `llm/stream` transformation — described above.
  *   2. `resolveModelInfo` capability augmentation — the Web host admits an
  *      image only when the *currently selected* model advertises image input.
- *      We make the text-only routes report image capability so the image is
+ *      We make text-only models report image capability so the image is
  *      admitted, leaving the actual handling to the transformer above.
  *
  * Both are disposed on unload (HMR-safe).
@@ -50,7 +57,7 @@ export interface Config {
   fallbackProvider?: string
   /** Model id on that route used to describe image-bearing requests. */
   fallbackModel?: string
-  /** Routes considered text-only; image-bearing requests on these are transformed. */
+  /** Optional allowlist of provider routes to handle; omitted or empty handles every route. */
   textProviders?: string[]
   /** Instruction sent to the vision model alongside each image. */
   descriptionPrompt?: string
@@ -71,7 +78,7 @@ const DEFAULT_DESCRIPTION_PROMPT =
 export const Config = z.object({
   fallbackProvider: z.string(),
   fallbackModel: z.string(),
-  textProviders: z.array(z.string()),
+  textProviders: z.array(z.string()).default([]),
   descriptionPrompt: z.string().default(DEFAULT_DESCRIPTION_PROMPT),
   descriptionMaxTokens: z.number().step(1).min(1).default(2000),
 })
@@ -82,9 +89,17 @@ export const inject = ['llm']
 export function apply(ctx: Context, config: Config = {}) {
   const fallbackProvider = config.fallbackProvider ?? 'opencode-go'
   const fallbackModel = config.fallbackModel ?? 'qwen3.6-plus'
-  const textProviders = new Set(config.textProviders ?? ['deepseek-official'])
+  const textProviders = new Set(config.textProviders ?? [])
   const descriptionPrompt = config.descriptionPrompt ?? DEFAULT_DESCRIPTION_PROMPT
   const descriptionMaxTokens = config.descriptionMaxTokens ?? 2000
+
+  /** Whether this provider/model pair is the fallback description route itself. */
+  const isFallbackRoute = (provider: string, model: string) =>
+    provider === fallbackProvider && model === fallbackModel
+
+  /** Whether the plugin handles this provider route (all routes when the allowlist is empty). */
+  const isEligible = (provider: string) =>
+    textProviders.size === 0 || textProviders.has(provider)
 
   const hasImage = (options: GenerateOptions) =>
     options.messages.some((message) => contentHasImage(message.content))
@@ -152,36 +167,46 @@ export function apply(ctx: Context, config: Config = {}) {
     return out
   }
 
-  // (1) Transform image-bearing requests so the text model sees descriptions.
-  const disposeRoute = ctx.on('llm/stream', function (options, next): AsyncIterable<StreamChunk> {
-    if (
-      options.provider !== fallbackProvider &&
-      textProviders.has(options.provider) &&
-      hasImage(options)
-    ) {
-      return (async function* () {
-        const messages = []
-        for (const message of options.messages) {
-          if (contentHasImage(message.content)) {
-            messages.push({ ...message, content: await transformContent(message.content, options.signal) })
-          } else {
-            messages.push(message)
-          }
-        }
-        const transformed: GenerateOptions = { ...options, messages }
-        // Re-enter on the same (text) route; the guard above no longer matches
-        // because every image block has been replaced with text.
-        yield* ctx.llm.stream(transformed)
-      })()
-    }
-    return next()
-  })
-
-  // (2) Advertise image capability on text-only routes so the host's
-  // submit-time admission check lets the image through; the transformer above
-  // is what actually handles it.
+  // (1) Transform image-bearing requests whose target model cannot see images
+  // natively, so the conversation model receives plain-text descriptions.
   const llm = ctx.llm
   const originalResolve = llm.resolveModelInfo.bind(llm)
+  const disposeRoute = ctx.on('llm/stream', function (options, next): AsyncIterable<StreamChunk> {
+    if (!isEligible(options.provider) || isFallbackRoute(options.provider, options.model) || !hasImage(options)) {
+      return next()
+    }
+    // The native-capability check is asynchronous, so it runs lazily on first
+    // iteration; the waterfall itself stays synchronous.
+    return (async function* () {
+      let nativeVision = false
+      try {
+        const info = await originalResolve(options.provider, options.model, options.signal)
+        nativeVision = info.inputModalities !== undefined && info.inputModalities.includes('image')
+      } catch {
+        // Capability unknown: assume text-only. The transformed re-dispatch
+        // below surfaces any real adapter failure.
+      }
+      if (nativeVision) {
+        yield* next()
+        return
+      }
+      const messages = []
+      for (const message of options.messages) {
+        if (contentHasImage(message.content)) {
+          messages.push({ ...message, content: await transformContent(message.content, options.signal) })
+        } else {
+          messages.push(message)
+        }
+      }
+      // Re-enter on the same route; the guard above no longer matches because
+      // every image block has been replaced with text.
+      yield* ctx.llm.stream({ ...options, messages })
+    })()
+  })
+
+  // (2) Advertise image capability on text-only models so the host's
+  // submit-time admission check lets the image through; the transformer above
+  // is what actually handles it.
   llm.resolveModelInfo = function (
     provider: string,
     model: string,
@@ -192,8 +217,8 @@ export function apply(ctx: Context, config: Config = {}) {
       if (
         modalities !== undefined &&
         !modalities.includes('image') &&
-        provider !== fallbackProvider &&
-        textProviders.has(provider)
+        isEligible(provider) &&
+        !isFallbackRoute(provider, model)
       ) {
         return { ...info, inputModalities: [...modalities, 'image'] }
       }

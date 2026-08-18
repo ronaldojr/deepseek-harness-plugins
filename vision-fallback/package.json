@@ -1,6 +1,6 @@
 {
   "name": "dsh-vision-fallback",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Vision-as-a-service host plugin for DeepSeek Harness: keeps a text-only main model in charge while a vision-capable fallback describes pasted images.",
   "license": "MIT",
   "type": "module",
